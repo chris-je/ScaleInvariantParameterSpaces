@@ -28,13 +28,21 @@ def get_arguments():
     return parser.parse_args(), device
 
 # save model weights and results in output folder
-def save_results(start_time, model, train_losses, val_losses, epoch_times, model_name, dataset_name, learning_rate, save_weights, optimizer_name):
-    results_folder = f"results/{model_name}_{dataset_name}_{start_time.strftime('%Y_%m_%d_%H:%M:%S')}"
+def save_results(start_time, run, total_runs, model, train_losses, val_losses, epoch_times, model_name, dataset_name, learning_rate, save_weights, optimizer_name):
+    
+    # Generate folder
+    base_folder = f"results/{model_name}_{dataset_name}_{start_time.strftime('%Y_%m_%d_%H:%M:%S')}"
+    results_folder = base_folder
+    # Generate subfolder for runs
+    if total_runs > 1:
+        results_folder += f"/{optimizer_name}_lr={learning_rate}"
     os.makedirs(results_folder, exist_ok=True)
     
+
     # save model weights
-    if(save_weights):
-        torch.save(model.state_dict(), os.path.join(results_folder, f"weights_{optimizer_name}_lr-{learning_rate}.pth"))
+    if save_weights:
+        filename = f"weights_{optimizer_name}_lr={learning_rate}.pth" if total_runs == 1 else f"weights_run_{run}.pth"
+        torch.save(model.state_dict(), os.path.join(results_folder, filename))
 
     # compute average step time
     avg_epoch_time = sum(epoch_times) / len(epoch_times)
@@ -50,9 +58,11 @@ def save_results(start_time, model, train_losses, val_losses, epoch_times, model
         "train_losses": train_losses,
         "val_losses": val_losses
     }
-    with open(os.path.join(results_folder, f"results_{optimizer_name}_lr-{learning_rate}.json"), "w") as f:
+    
+    filename = f"results_{optimizer_name}_lr={learning_rate}.json" if total_runs == 1 else f"results_run_{run}.json"
+    with open(os.path.join(results_folder, filename), "w") as f:
         json.dump(results, f, indent=4)
     print(f"Results saved in {results_folder}\n")
 
-    return results_folder
+    return base_folder
 

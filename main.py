@@ -27,26 +27,28 @@ def main():
     for optimizer_name, learning_rate, dataset in combinations:
         print(f"\nRunning training with optimizer: {optimizer_name}, learning_rate: {learning_rate}, dataset: {dataset}")
 
-        # load dataset
-        train_loader, val_loader = get_data_loader(dataset, args.batch_size)
+        for run in range(args.runs):
 
-        # load model (do this for each optimizer to clear the model)
-        model = get_model(dataset).to(device)
+            # load dataset
+            train_loader, val_loader = get_data_loader(dataset, args.batch_size)
 
-        # load model name for results
-        model_name = model.__class__.__name__
+            # load model (do this for each optimizer to clear the model)
+            model = get_model(dataset).to(device)
 
-        # load optimizer
-        optimizer = get_optimizer(model, optimizer_name, learning_rate, device)
+            # load model name for results
+            model_name = model.__class__.__name__
 
-        # train model
-        train_losses, val_losses, epoch_times = train_model(model, train_loader, val_loader, optimizer, device, args.epochs)
+            # load optimizer
+            optimizer = get_optimizer(model, optimizer_name, learning_rate, device)
 
-        # save results
-        results_folder = save_results(start_time, model, train_losses, val_losses, epoch_times, model_name, dataset, learning_rate, args.save_weights,  optimizer_name)
+            # train model
+            train_losses, val_losses, epoch_times = train_model(model, train_loader, val_loader, optimizer, device, args.epochs)
 
-        # plot results
-        plot_results(results_folder)
+            # save results
+            results_folder = save_results(start_time, run+1, args.runs, model, train_losses, val_losses, epoch_times, model_name, dataset, learning_rate, args.save_weights,  optimizer_name)
+
+            # plot results
+            plot_results(results_folder)
 
 
 if __name__ == "__main__":

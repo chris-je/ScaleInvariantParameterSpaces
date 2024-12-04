@@ -2,10 +2,11 @@ import os
 import json
 import matplotlib.pyplot as plt
 import itertools
+import numpy as np
 
 def plot_results(folder_path):
-
-    results = load_results(folder_path)
+    all_results = load_results(folder_path)
+    results = average_results(all_results)
 
     # Visualize speed of different optimizers
     plot_thoughput(results, folder_path)
@@ -25,27 +26,42 @@ def plot_results(folder_path):
         # We got more than more than one optimizer for this learning rate => create plot
         if len(selected_results) > 1:
             plot_loss(selected_results, folder_path, "learning_rate", learning_rate)
-
-    print(f"Plots have been saved in: {folder_path}")
     
 
 # load all jsons in the folder path
+# TODO: refactor
 def load_results(folder_path):
     # find all JSON files in the folder
-    json_files = [f for f in os.listdir(folder_path) if f.endswith('.json')]
+    json_files = []
+    for root, _, files in os.walk(folder_path):
+        for file in files:
+            if file.endswith('.json'):
+                json_files.append(os.path.join(root, file))
+
     if not json_files:
         print(f"No JSON files found in folder: {folder_path}")
         return
 
     # load data from each JSON file
     results = {}
-    for json_file in json_files:
-        file_path = os.path.join(folder_path, json_file)
+    for file_path in json_files:
         with open(file_path, 'r') as f:
             data = json.load(f)
-            optimizer_name = json_file.split('_')[1]  # Extract optimizer name from file name
-            learning_rate = json_file.split('_')[2].split('-')[1].rstrip('.json') # Extract learning rate
-            # TODO: 4
+            # Extract optimizer name and learning rate from folder structure
+            subfolder = os.path.basename(os.path.dirname(file_path))
+            if '_' in subfolder and '=' in subfolder:
+                optimizer_name, lr_part = subfolder.split('_')
+                learning_rate = lr_part.split('=')[1]
+            else:
+                # extract from filename if there are no subfolders (single run)
+                filename = os.path.basename(file_path).replace('.json', '')
+                if filename.startswith("results_") and '_lr=' in filename:
+                    _, optimizer_name, lr_part = filename.split('_')
+                    learning_rate = lr_part.split('=')[1]
+                else:
+                    optimizer_name = "unknown"
+                    learning_rate = "unknown"
+            
             if optimizer_name not in results:
                 results[optimizer_name] = {}
             if learning_rate not in results[optimizer_name]:
@@ -54,6 +70,33 @@ def load_results(folder_path):
     
     return results
 
+# Average results from multiple runs
+# TODO: refactor
+def average_results(all_results):
+    averaged_results = {}
+    # Iterate through each optimizer
+    for optimizer, lr_results in all_results.items():
+        if optimizer not in averaged_results:
+            averaged_results[optimizer] = {}
+        # iterate through all files with the given optimizer
+        for lr, runs in lr_results.items():
+            if len(runs) > 1:
+                avg_train_losses = np.mean([run['train_losses'] for run in runs], axis=0).tolist()
+                avg_val_losses = np.mean([run['val_losses'] for run in runs], axis=0).tolist()
+                avg_epoch_time = np.mean([run['avg_epoch_time'] for run in runs])
+                averaged_results[optimizer][lr] = [{
+                    "model": runs[0]['model'],
+                    "dataset": runs[0]['dataset'],
+                    "learning_rate": runs[0]['learning_rate'],
+                    "optimizer": runs[0]['optimizer'],
+                    "epochs": runs[0]['epochs'],
+                    "avg_epoch_time": avg_epoch_time,
+                    "train_losses": avg_train_losses,
+                    "val_losses": avg_val_losses
+                }]
+            else:
+                averaged_results[optimizer][lr] = runs
+    return averaged_results
 
 # Plot loss comparison between different optimizers
 # def plot_loss(results, folder_path):
@@ -123,7 +166,7 @@ def plot_thoughput(results, folder_path):
     plt.bar(optimizer_names, throughput_values, color=bar_colors)
     plt.xlabel('Optimizers')
     plt.ylabel('Epochs per Second')
-    plt.title('Throughput (Epochs per Second)')
+    plt.title('Throughput')
     plt.grid(axis='y')
 
     # save throughput plot in the folder

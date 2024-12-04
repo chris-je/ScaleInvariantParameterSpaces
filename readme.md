@@ -13,16 +13,21 @@ This project is based on:
 
 # How to run
 
-`python3 main.py --batch_size 64 --learning_rate 0.01 --optimizer all --epochs 200 --dataset mnist`
+`python3 main.py --learning_rate 0.01 --optimizer sgd gsgd --dataset mnist`
 
 
 
 ### Parameters
 
-| Parameter | Values                           | Description                                                  |
-| --------- | -------------------------------- | ------------------------------------------------------------ |
-| optimizer | sgd<br />adam<br />gsgd<br />all | You can run the code with `all` to compare the different optimizers.<br />In `optimizers/gsgd` you can find the gsgd implementation |
-| dataset   | mnist<br />cifar10<br />cifar100 | `Mnist` and `Cifar10` use the same model as in the original G-SGD paper |
+| Parameter     | Values                                             | Default | Description                                                  |
+| ------------- | -------------------------------------------------- | ------- | ------------------------------------------------------------ |
+| batch_size    |                                                    | 64      |                                                              |
+| learning_rate |                                                    | 0.01    | For comparison, you can add multiple learning rates separated with a space |
+| optimizer     | sgd<br />adam<br />gsgd<br />                      | all     | You can use multiple optimizers separated with a space.<br />You can find the gsgd implementation in `optimizers/gsgd` |
+| dataset       | mnist<br />cifar10<br />cifar100<br />fashionmnist |         | You can use multiple datasets separated with a space.<br />`mnist` and `cifar10` use the same model as in the original G-SGD paper |
+| epochs        |                                                    | 50      | How often to iterate through the training data during training |
+| runs          |                                                    | 1       | Run model multiple times with the same settings to compute an average |
+| save_weights  | -                                                  | false   | When using this flag, the weights will be saved              |
 
 The model is currently also selected with the dataset parameter.
 
