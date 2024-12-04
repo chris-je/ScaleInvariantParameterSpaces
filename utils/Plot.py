@@ -100,8 +100,8 @@ class PlotTrainingResults:
 
         plt.bar(optimizer_names, throughput_values, color=bar_colors)
         plt.xlabel('Optimizers')
-        plt.ylabel('Steps per Second')
-        plt.title('Throughput (Steps per Second) for Each Optimizer')
+        plt.ylabel('Epochs per Second')
+        plt.title('Throughput (Epochs per Second) for Each Optimizer')
         plt.grid(axis='y')
 
         # save throughput plot in the folder
