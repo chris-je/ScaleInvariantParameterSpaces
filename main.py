@@ -1,51 +1,53 @@
 import torch
 from torch import nn, optim
 from datetime import datetime
+from itertools import product
 
 # Import utils
 from utils.Dataset import get_data_loader
 from utils.Model import get_model
 from utils.Optimizer import get_optimizer
-from utils.Plot import PlotTrainingResults
+from utils.Plot import plot_results
 from utils.LoadSave import get_arguments, save_results
 from Training import train_model, validate_model
 
 
-
 def main():
 
-    results_folder = ""
+    # Save current time for folder names
+    start_time = datetime.now()
 
     # get configuration
     args, device = get_arguments()
 
-    # load dataset
-    train_loader, val_loader = get_data_loader(args.dataset, args.batch_size)
+    # Get all combinations of optimizers, learning rates, and datasets
+    combinations = product(args.optimizer, args.learning_rate, args.dataset)
 
-    # load model
-    model_name = get_model(args.dataset).__class__.__name__
+    # Iterate over all combinations
+    for optimizer_name, learning_rate, dataset in combinations:
+        print(f"\nRunning training with optimizer: {optimizer_name}, learning_rate: {learning_rate}, dataset: {dataset}")
 
-    # load all optimizers
-    optimizers = ["adam", "sgd", "gsgd"] if args.optimizer.lower() == "all" else [args.optimizer]
-
-    # iterate over all optimizers if "all" was specified
-    for optimizer_name in optimizers:
+        # load dataset
+        train_loader, val_loader = get_data_loader(dataset, args.batch_size)
 
         # load model (do this for each optimizer to clear the model)
-        model = get_model(args.dataset).to(device)
+        model = get_model(dataset).to(device)
+
+        # load model name for results
+        model_name = model.__class__.__name__
 
         # load optimizer
-        optimizer = get_optimizer(model, optimizer_name, args.learning_rate, device)
+        optimizer = get_optimizer(model, optimizer_name, learning_rate, device)
 
         # train model
         train_losses, val_losses, epoch_times = train_model(model, train_loader, val_loader, optimizer, device, args.epochs)
 
         # save results
-        results_folder = save_results(results_folder, model, train_losses, val_losses, epoch_times, model_name, args.dataset, args.learning_rate, optimizer_name)
+        results_folder = save_results(start_time, model, train_losses, val_losses, epoch_times, model_name, dataset, learning_rate, args.save_weights,  optimizer_name)
 
-    # plot results
-    plotter = PlotTrainingResults()
-    plotter.plot_results(results_folder)
+        # plot results
+        plot_results(results_folder)
+
 
 if __name__ == "__main__":
     main()

@@ -10,10 +10,12 @@ from datetime import datetime
 def get_arguments():
     parser = argparse.ArgumentParser()
     parser.add_argument("--batch_size", type=int, default=64)
-    parser.add_argument("--learning_rate", type=float, default=0.001)
-    parser.add_argument("--optimizer", type=str, default="gsgd", help="adam, sgd, gsgd, or 'all' to run with each")
-    parser.add_argument("--epochs", type=int, default=10)
-    parser.add_argument("--dataset", type=str, default="mnist", help="fashionmnist, mnist, cifar10, cifar100")
+    parser.add_argument("--learning_rate", type=float, nargs="+", default=[0.001])
+    parser.add_argument("--optimizer", type=str, nargs="+", default=["sgd"])
+    parser.add_argument("--dataset", type=str, nargs="+", default=["mnist"])
+    parser.add_argument("--epochs", type=int, default=50)
+    parser.add_argument("--runs", type=int, default=1)
+    parser.add_argument("--save_weights", action="store_true")
 
     # select corrent device
     device = (
@@ -26,13 +28,13 @@ def get_arguments():
     return parser.parse_args(), device
 
 # save model weights and results in output folder
-def save_results(results_folder, model, train_losses, val_losses, epoch_times, model_name, dataset_name, learning_rate, optimizer_name):
-    if results_folder == "":
-        results_folder = f"results/{model_name}_{dataset_name}_{datetime.now().strftime('%Y_%m_%d_%H:%M:%S')}"
-        os.makedirs(results_folder, exist_ok=True)
+def save_results(start_time, model, train_losses, val_losses, epoch_times, model_name, dataset_name, learning_rate, save_weights, optimizer_name):
+    results_folder = f"results/{model_name}_{dataset_name}_{start_time.strftime('%Y_%m_%d_%H:%M:%S')}"
+    os.makedirs(results_folder, exist_ok=True)
     
     # save model weights
-    torch.save(model.state_dict(), os.path.join(results_folder, f"weights_{optimizer_name}.pth"))
+    if(save_weights):
+        torch.save(model.state_dict(), os.path.join(results_folder, f"weights_{optimizer_name}_lr-{learning_rate}.pth"))
 
     # compute average step time
     avg_epoch_time = sum(epoch_times) / len(epoch_times)
@@ -48,7 +50,7 @@ def save_results(results_folder, model, train_losses, val_losses, epoch_times, m
         "train_losses": train_losses,
         "val_losses": val_losses
     }
-    with open(os.path.join(results_folder, f"results_{optimizer_name}.json"), "w") as f:
+    with open(os.path.join(results_folder, f"results_{optimizer_name}_lr-{learning_rate}.json"), "w") as f:
         json.dump(results, f, indent=4)
     print(f"Results saved in {results_folder}\n")
 
