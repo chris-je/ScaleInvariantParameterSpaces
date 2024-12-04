@@ -114,7 +114,7 @@ def plot_loss(results, folder_path, plot_type, identifier):
             result_colors[key] = next(color_cycle)
 
         for result in result_list:
-            epochs = range(1, result['epochs'] + 1)
+            epochs = range(0, result['epochs'])
             train_losses = result['train_losses']
             val_losses = result['val_losses']
             color = result_colors[key]

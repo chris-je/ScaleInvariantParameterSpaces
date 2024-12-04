@@ -13,6 +13,11 @@ def train_model(model, train_loader, val_loader, optimizer, device, epochs):
 
     train_losses, val_losses, epoch_times = [], [], []
 
+    # compute initial loss
+    initial_val_loss = validate_model(model, val_loader, criterion, device)
+    train_losses.append(initial_val_loss)
+    val_losses.append(initial_val_loss)
+
 
     for epoch in range(epochs):
         # Measure performance (time per epoch)
