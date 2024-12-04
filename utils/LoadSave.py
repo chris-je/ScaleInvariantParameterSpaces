@@ -26,13 +26,16 @@ def get_arguments():
     return parser.parse_args(), device
 
 # save model weights and results in output folder
-def save_results(results_folder, model, train_losses, val_losses, model_name, dataset_name, learning_rate, optimizer_name):
+def save_results(results_folder, model, train_losses, val_losses, epoch_times, model_name, dataset_name, learning_rate, optimizer_name):
     if results_folder == "":
         results_folder = f"results/{model_name}_{dataset_name}_{datetime.now().strftime('%Y_%m_%d_%H:%M:%S')}"
         os.makedirs(results_folder, exist_ok=True)
     
     # save model weights
     torch.save(model.state_dict(), os.path.join(results_folder, f"weights_{optimizer_name}.pth"))
+
+    # compute average step time
+    avg_epoch_time = sum(epoch_times) / len(epoch_times)
 
     # save json with results
     results = {
@@ -41,6 +44,7 @@ def save_results(results_folder, model, train_losses, val_losses, model_name, da
         "learning_rate": learning_rate,
         "optimizer": optimizer_name,
         "epochs": len(train_losses),
+        "avg_epoch_time": avg_epoch_time,
         "train_losses": train_losses,
         "val_losses": val_losses
     }

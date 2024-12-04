@@ -11,10 +11,15 @@ def train_model(model, train_loader, val_loader, optimizer, device, epochs):
     criterion = nn.CrossEntropyLoss()
     model.train()
 
-    train_losses, val_losses = [], []
+    train_losses, val_losses, epoch_times = [], [], []
+
+
     for epoch in range(epochs):
+        # Measure performance (time per epoch)
+        start_time = time.time()
         running_loss = 0.0
         for inputs, labels in tqdm(train_loader, desc=f"Training Epoch {epoch+1}/{epochs}"):
+
             inputs, labels = inputs.to(device), labels.to(device)
             
             optimizer.zero_grad()
@@ -22,6 +27,7 @@ def train_model(model, train_loader, val_loader, optimizer, device, epochs):
             loss = criterion(outputs, labels)
             loss.backward()
             optimizer.step()
+
             running_loss += loss.item()
         
         avg_train_loss = running_loss / len(train_loader)
@@ -31,7 +37,9 @@ def train_model(model, train_loader, val_loader, optimizer, device, epochs):
 
         print(f"Epoch {epoch+1}, Training Loss: {avg_train_loss:.4f}, Validation Loss: {val_loss:.4f}")
     
-    return train_losses, val_losses
+        epoch_times.append(time.time() - start_time) # compute duration of one epoch and save it in array
+    
+    return train_losses, val_losses, epoch_times
 
 # validation Function
 def validate_model(model, val_loader, criterion, device):

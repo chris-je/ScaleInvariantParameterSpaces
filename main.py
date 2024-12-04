@@ -38,14 +38,14 @@ def main():
         optimizer = get_optimizer(model, optimizer_name, args.learning_rate, device)
 
         # train model
-        train_losses, val_losses = train_model(model, train_loader, val_loader, optimizer, device, args.epochs)
+        train_losses, val_losses, epoch_times = train_model(model, train_loader, val_loader, optimizer, device, args.epochs)
 
         # save results
-        results_folder = save_results(results_folder, model, train_losses, val_losses, model_name, args.dataset, args.learning_rate, optimizer_name)
+        results_folder = save_results(results_folder, model, train_losses, val_losses, epoch_times, model_name, args.dataset, args.learning_rate, optimizer_name)
 
     # plot results
-    plotter = PlotTrainingResults(results_folder)
-    plotter.plot_results()
+    plotter = PlotTrainingResults()
+    plotter.plot_results(results_folder)
 
 if __name__ == "__main__":
     main()
