@@ -15,7 +15,6 @@ def plot_results(folder_path):
     # Iterate through all the optimizers
     for optimizer_name, optimizer_results in results.items():
         # We got more than one learning rate for this optimizer => create plot
-        if len(optimizer_results) > 1:
             plot_loss(optimizer_results, folder_path, "optimizer", optimizer_name)
 
     # Create plots for each learning rate showing multiple optimizers
@@ -24,7 +23,6 @@ def plot_results(folder_path):
     for learning_rate in learning_rates:
         selected_results = {opt: res[learning_rate] for opt, res in results.items() if learning_rate in res}
         # We got more than more than one optimizer for this learning rate => create plot
-        if len(selected_results) > 1:
             plot_loss(selected_results, folder_path, "learning_rate", learning_rate)
     
 
