@@ -23,7 +23,7 @@ def plot_results(folder_path):
     for learning_rate in learning_rates:
         selected_results = {opt: res[learning_rate] for opt, res in results.items() if learning_rate in res}
         # We got more than more than one optimizer for this learning rate => create plot
-            plot_loss(selected_results, folder_path, "learning_rate", learning_rate)
+        plot_loss(selected_results, folder_path, "learning_rate", learning_rate)
     
 
 # load all jsons in the folder path
