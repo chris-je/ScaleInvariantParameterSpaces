@@ -18,7 +18,7 @@ class GSGD(Optimizer):
     def __init__(self, params, lr, momentum=0, dampening=0, weight_decay=0, nesterov=False, device="cpu"):
         defaults = dict(lr=lr, momentum=momentum, dampening=dampening, weight_decay=weight_decay, nesterov=nesterov, device=device)
         super(GSGD, self).__init__(params, defaults)
-        self.lr_0 = self.lr_t = lr  # Initial learning rate
+        self.lr = lr  # Initial learning rate
         self.device = device
 
         # TODO: implement momentum and dampening
@@ -38,30 +38,20 @@ class GSGD(Optimizer):
 
     # calculate masks to identify skeleton weights in the model
     def generate_skeleton_masks(self):
-        self.skeleton_layer_index = 0
         num_layer = len(self.params)
         num_hidden = num_layer - 1
         mask = []
 
-        # Determine the largest hidden layer to use as the skeleton layer
-        largest_layer = [0, 0]
-        for i in range(num_layer - 1):
-            num_parameters = self.params[i].shape[0]
-            if num_parameters > largest_layer[1]:
-                largest_layer = [i, num_parameters]
-
-        self.skeleton_layer_index = largest_layer[0]  # Index of the skeleton layer
-        self.skeleton_layer_size = largest_layer[1]  # Size of the skeleton layer
+        # Use first layer as skeleton layer
+        self.skeleton_layer_index = 0
+        self.skeleton_layer_size = self.params[0].shape[0]  # Size of the skeleton layer
 
         # generate masks for each layer
         for layer_idx, layer in enumerate(self.params):
             outcome, income = layer.shape
+            loc = False
             if layer_idx == 0:
                 loc = 'first'
-            elif layer_idx == num_layer - 1:
-                loc = 'last'
-            else:
-                loc = 'middle'
             mask.append(self.generate_layer_mask(outcome, income, loc).to(self.device))
             # Apply mask to layer data to separate skeleton weights
             layer.data = layer.data * (1 - mask[-1]) + mask[-1]
@@ -71,62 +61,29 @@ class GSGD(Optimizer):
 
         return (mask, s_mask_idx, s_mask_idx_shape)
 
+    # TODO: check if this aligns with the paper (this is just a refactored version)
+    def generate_layer_mask(self, out_shape, in_shape, loc='middle'):
+        # generate mask for first layer
+        ratio = max(out_shape, in_shape) // min(out_shape, in_shape) + 1
+        eye_matrix = torch.eye(min(out_shape, in_shape))
+        
+        if out_shape > in_shape:
+            mask = eye_matrix.repeat(ratio, 1)[:out_shape, :]
+        elif loc == "first":
+            eye_matrix = torch.eye(max(out_shape, in_shape))
+            mask = eye_matrix[:out_shape, :in_shape]
+        else:
+            mask = eye_matrix.repeat(ratio, ratio)[:out_shape, :in_shape]
+        
+        return mask.to(self.device)
+
     # recover sparse skeleton layers
     def recover_s_layer(self, value, idx, shape):
         return torch.sparse.FloatTensor(idx, value, shape).to_dense().to(self.device)
-
-    # generate mask for skeleton weights for a given single layer
-    def generate_layer_mask(self, out_shape, in_shape, loc='middle'):
-        # generate mask for first layer
-        if loc == 'first':
-            ratio = out_shape // in_shape + 1
-            out_idx = list(range(out_shape))
-            in_idx = list(range(in_shape)) * ratio
-            idx_tmp = list(zip(out_idx, in_idx))
-            idx = torch.LongTensor([x for x in idx_tmp]).transpose(0, 1)
-            return(
-                self.recover_s_layer(
-                    idx=idx,
-                    value=torch.ones(out_shape),
-                    shape=[out_shape, in_shape])
-            )
-
-        # generate mask for last layer
-        elif loc == 'last':
-            ratio = in_shape // out_shape + 1
-            out_idx = list(range(out_shape)) * ratio
-            in_idx = list(range(in_shape))
-            idx_tmp = list(zip(out_idx, in_idx))
-            idx = torch.LongTensor([x for x in idx_tmp]).transpose(0, 1)
-            return(
-                self.recover_s_layer(
-                    idx=idx,
-                    value=torch.ones(in_shape),
-                    shape=[out_shape, in_shape])
-            )
-
-        # generate mask for middle layers
-        elif loc == 'middle':
-            if in_shape > out_shape:
-                ratio = in_shape // out_shape + 1
-                out_idx = list(range(out_shape)) * ratio
-                in_idx = list(range(in_shape))
-            else:
-                ratio = out_shape // in_shape + 1
-                out_idx = list(range(out_shape))
-                in_idx = list(range(in_shape)) * ratio
-
-            idx_tmp = list(zip(out_idx, in_idx))
-            idx = torch.LongTensor([x for x in idx_tmp]).transpose(0, 1)
-            return(
-                self.recover_s_layer(
-                    idx=idx,
-                    value=torch.ones(max(out_shape, in_shape)),
-                    shape=[out_shape, in_shape])
-            )
+        
 
     # calculate the path ratio R used for skeleton weight updates
-    def compute_R(self, lr, skeleton_weights, skeleton_gradients, sigma_dw, v_value):
+    def compute_path_ratio(self, lr, skeleton_weights, skeleton_gradients, sigma_dw, v_value):
         return (1 - lr * (skeleton_gradients * skeleton_weights - sigma_dw) / (v_value * v_value))
 
     # Function to update model parameters using calculated path ratios
@@ -141,7 +98,7 @@ class GSGD(Optimizer):
 
             if layer_is_skeleton:
                 # Update skeleton layer weights
-                layer.data = (layer.data - self.lr_t * layer.grad.data) * (1 - this_mask) + \
+                layer.data = (layer.data - self.lr * layer.grad.data) * (1 - this_mask) + \
                              layer.data * self.recover_s_layer(value=R,
                                                                idx=self.s_mask_idx,
                                                                shape=self.s_mask_idx_shape)
@@ -149,21 +106,24 @@ class GSGD(Optimizer):
             elif layer_idx > self.skeleton_layer_index:
                 # Update layers after the skeleton layer
                 out_shape, in_shape = layer.data.shape
-                layer.data = (layer.data - self.lr_t * layer.grad.data / (v_value[:layer.data.shape[1]].view(1, -1) ** 2)) / (R[:in_shape].view(1, -1)) * (1 - this_mask) + \
+                layer.data = (layer.data - self.lr * layer.grad.data / (v_value[:layer.data.shape[1]].view(1, -1) ** 2)) / (R[:in_shape].view(1, -1)) * (1 - this_mask) + \
                     layer.data * this_mask
 
-            elif layer_idx < self.skeleton_layer_index:
-                # Update layers before the skeleton layer
-                out_shape, in_shape = layer.data.shape
-                layer.data = (layer.data - self.lr_t * layer.grad.data / (v_value[:layer.data.shape[0]].view(-1, 1) ** 2)) / (R[:out_shape].view(-1, 1)) * (1 - this_mask) + \
-                    layer.data * this_mask
+            else:
+                print("Error in G-SGD: before skeleton layer?")
+
+            # elif layer_idx < self.skeleton_layer_index:
+            #     # Update layers before the skeleton layer
+            #     out_shape, in_shape = layer.data.shape
+            #     layer.data = (layer.data - self.lr * layer.grad.data / (v_value[:layer.data.shape[0]].view(-1, 1) ** 2)) / (R[:out_shape].view(-1, 1)) * (1 - this_mask) + \
+            #         layer.data * this_mask
 
 
     # perform a single optimization step using g-sgd
     def step(self, closure=None):
         num_layer = len(self.params)
         mask = self.mask
-        lr = self.lr_t
+        lr = self.lr
 
         # initialize lists for skeleton and non-skeleton weights
         skeleton_weights = []
@@ -193,7 +153,7 @@ class GSGD(Optimizer):
                 skeleton_gradients = (layer.grad.data * this_mask).sum(1)
 
         # compute path ratios
-        path_ratio = self.compute_R(lr=lr,
+        path_ratio = self.compute_path_ratio(lr=lr,
             skeleton_weights=skeleton_weights,
             skeleton_gradients=skeleton_gradients,
             sigma_dw=sigma_dw,
