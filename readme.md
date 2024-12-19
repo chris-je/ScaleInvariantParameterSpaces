@@ -1,7 +1,12 @@
 # Scale invariant Laplace approximations
 
+This project aims to abstract and test the [G-Space](https://arxiv.org/abs/1802.03713) for the use with laplace approximations.
 
-This project is based on:
+Running the main script will create plots and weights allowing the comparison of different learning rates and optimizers.
+
+
+
+**This project is based on:**
 
 [G-SGD: Optimizing ReLU Neural Networks in its Positively Scale-Invariant Space](https://arxiv.org/abs/1802.03713)
 
