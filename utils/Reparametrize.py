@@ -1,6 +1,7 @@
 import torch
 import torch.nn as nn
 import time
+import math
 
 
 def reparametrize(model):
@@ -10,8 +11,8 @@ def reparametrize(model):
     while keeping the functionality the same.
 
     Constraints:
-        - Model needs to be completely straight
-        - All Layers have to be linear
+        - Except for the first layer, each layer has to be at least as big as the next one
+        - All Layers have to be linear layers
         - All Activation functions have to be ReLU
     """
     D, D_inv = create_diagonal_matrices(model)
@@ -35,38 +36,32 @@ def create_diagonal_matrices(model):
     D_inv = [None] * (N - 1)
     D = [None] * (N - 1)
 
-
-
-    # Compute last layer
-    #W = layers[-1].weight.data
-    # TODO: what if matrix is not square?
-    #diag = W.diag()
-    #if torch.any(diag == 0):
-    #    raise ValueError(f"Last Layer contains zero entries on the diagonal.")
-    
-    # ========== Last layer D
-    #D_inv[-1] = torch.diag(1.0 / torch.abs(W.diag()))
-    #D[-1] = torch.diag(torch.abs(W.diag()))
-
-
     
     # Iterate through layers in reverse
     for i in range(N - 1, 0, -1):
         W = layers[i].weight.data
 
-        # TODO: no square shape?
-        
         # Check if last layer => D doesn't exist
         if i == N-1:
-            diag = W.diag()
+            DW = W
         else:
-            diag = (D[i] @ W).diag()
+            DW = D[i] @ W
+
+        # D @ W not square => make square out of it
+        if DW.shape[0] != DW.shape[1]:
+            # Repeat matrix until it is square
+            biggerSize = max(DW.shape[0], DW.shape[1])
+            repeats = (math.ceil(biggerSize / DW.shape[0]), math.ceil(biggerSize / DW.shape[1]))
+            DW = torch.tile(DW, repeats)[:biggerSize, :biggerSize]
+        
+        # Diagonal entries of D @ W
+        diag = DW.diag()
 
         # Check if matrix is valid
         if torch.any(diag == 0):
             raise ValueError(f"Layer '{i}' has 0-entries on the diagonal.")
 
-        # Compute D and D^-1
+        # Compute next D and D^-1
         D_inv[i-1] = torch.abs(torch.diag(1.0 / diag))
         D[i-1] = torch.abs(torch.diag(diag))
     
@@ -130,9 +125,9 @@ def apply_reparam(model, D, D_inv):
 class SimpleModel(nn.Module):
     def __init__(self):
         super(SimpleModel, self).__init__()
-        self.fc1 = nn.Linear(5, 5)
+        self.fc1 = nn.Linear(8, 5)
         self.fc2 = nn.Linear(5, 5)
-        self.fc3 = nn.Linear(5, 5)
+        self.fc3 = nn.Linear(5, 3)
 
     def forward(self, x):
         x = self.fc1(x)
