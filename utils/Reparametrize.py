@@ -29,7 +29,7 @@ def create_diagonal_matrices(model):
     """
 
     # Initialize layers and scaling matrices
-    layers = list(model.children())
+    layers = [module for module in model.modules() if isinstance(module, nn.Linear)]
     N = len(layers)
     if N == 0:
         return []
