@@ -2,6 +2,7 @@ import torch
 import torch.nn as nn
 import time
 import math
+from scipy.optimize import linear_sum_assignment
 
 
 def reparametrize(model):
@@ -11,8 +12,7 @@ def reparametrize(model):
     while keeping the functionality the same.
 
     Constraints:
-        - Except for the first layer, each layer has to be at least as big as the next one
-        - All Layers have to be linear layers
+        - All Layers have to be fully connected linear layers
         - All Activation functions have to be ReLU
     """
     D, D_inv = create_diagonal_matrices(model)
@@ -22,7 +22,7 @@ def reparametrize(model):
 
 def create_diagonal_matrices(model):
     """
-    Create diagonal scaling matrices for a ReLU model.
+    Create scaling matrices for a ReLU model. They are optimized using the Hungarian algorithm
     Starting with the last layer.
     Essentially computing D[i-1] = | diag(D[i] W[i]) |
     and it's inverse D⁻¹[i-1]
@@ -48,14 +48,27 @@ def create_diagonal_matrices(model):
             DW = D[i] @ W
 
         # D @ W not square => make square out of it
-        if DW.shape[0] != DW.shape[1]:
+        if DW.shape[0] < DW.shape[1]:
             # Repeat matrix until it is square
             biggerSize = max(DW.shape[0], DW.shape[1])
             repeats = (math.ceil(biggerSize / DW.shape[0]), math.ceil(biggerSize / DW.shape[1]))
             DW = torch.tile(DW, repeats)[:biggerSize, :biggerSize]
-        
+
+        # Use this, if we want to use the diagonal as skeleton weights
         # Diagonal entries of D @ W
         diag = DW.diag()
+
+        # Select best entries for skeleton weights (the ones closest to 1 or -1)
+        # Compute cost for each weight, if it is used as skeleton
+        cost_matrix = torch.min(torch.abs(DW - 1), torch.abs(DW + 1)).numpy()
+        # Find indices of best skeleton candidates
+        row_ind, col_ind = linear_sum_assignment(cost_matrix)
+        selected_values = DW[row_ind, col_ind]
+        diag[col_ind] = selected_values
+
+        # Use this, if we want to use the diagonal as skeleton weights
+        # Diagonal entries of D @ W
+        # diag = DW.diag()
 
         # Check if matrix is valid
         if torch.any(diag == 0):
@@ -112,6 +125,22 @@ def apply_reparam(model, D, D_inv):
             
             # Save new weights / biases
             layer.weight.copy_(new_W)
+
+
+            # Scale gradients
+            # Updated weight scaling with gradient hook to recover the original gradient scale.
+            if i == 0:
+                # Undo left scaling: multiply gradient from left by inv(D[i])^T.
+                layer.weight.register_hook(lambda grad, l=i: grad)
+            elif i != len(layers) - 1:
+                # Undo left scaling by inv(D[i])^T and right scaling by (D_inv[i-1])^-T (which equals D[i-1]^T)
+                layer.weight.register_hook(lambda grad, l=i: grad @ D[l-1].T)
+            else:
+                # Undo right scaling: multiply gradient from right by (D_inv[i-1])^-T.
+                layer.weight.register_hook(lambda grad, l=i: grad @ D[l-1].T)
+
+
+
             if b is not None:
                 layer.bias.copy_(new_b)
     
@@ -125,8 +154,8 @@ def apply_reparam(model, D, D_inv):
 class SimpleModel(nn.Module):
     def __init__(self):
         super(SimpleModel, self).__init__()
-        self.fc1 = nn.Linear(8, 5)
-        self.fc2 = nn.Linear(5, 5)
+        self.fc1 = nn.Linear(8, 3)
+        self.fc2 = nn.Linear(3, 5)
         self.fc3 = nn.Linear(5, 3)
 
     def forward(self, x):
@@ -156,8 +185,16 @@ def main():
 
     # Compute difference between original and reparametrized version
     differences = []
+
+    # Compute input size of network
+    input_size = 0
+    for layer in model.modules():
+        if isinstance(layer, nn.Linear):
+            input_size = layer.in_features
+    
+    # Run multiple times to get average
     for _ in range(100):
-        test_input = torch.randn(1, model.fc1.in_features)
+        test_input = torch.randn(1, input_size)
         original_output = model(test_input)
         reparam_output = new_model(test_input)
         differences.append(torch.norm(original_output - reparam_output).item())

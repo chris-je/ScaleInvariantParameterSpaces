@@ -1,18 +1,21 @@
 from models.Cifar10Net import Cifar10Net
-from models.CifarNN import CifarNN
 from models.MnistNet import MnistNet
-from models.SimpleNN import SimpleNN
+from models.Simplecnn import Simplecnn
+from models.GModel import GModel
 
 
-# Select a model according to the arguments and return it
-def get_model(dataset_name):
-    if dataset_name.lower() in ["mnist", "fashionmnist"]:
-        # return SimpleNN()
-        return MnistNet()
-    elif dataset_name.lower() in ["cifar100"]:
-        num_classes = 10 if dataset_name.lower() == "cifar10" else 100
-        return CifarNN(num_classes)
-    elif dataset_name.lower() in ["cifar10"]:
-        return Cifar10Net()
+def get_model(model_name, device):
+    """
+    Returns a model given it's name
+    """
+    if model_name.lower() in ["mnist", "fashionmnist"]:
+        model = MnistNet()
+    elif model_name.lower() in ["cifar10"]:
+        model = Cifar10Net()
+    elif model_name.lower() in ["cnn"]:
+        model = Simplecnn()
+
     else:
-        raise ValueError(f"Unsupported model: {dataset_name}")
+        raise ValueError(f"Unsupported model: {model_name}")
+
+    return model.to(device)
